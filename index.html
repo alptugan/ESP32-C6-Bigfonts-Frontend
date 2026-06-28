@@ -82,13 +82,12 @@
             cursor: not-allowed;
         }
 
-        input[type="text"] {
+        input[type="number"] {
             width: 100%;
             padding: 12px;
             box-sizing: border-box;
             border: 1px solid #ccc;
             border-radius: 6px;
-            margin-bottom: 15px;
             font-size: 1rem;
         }
 
@@ -97,9 +96,26 @@
             text-align: left;
         }
 
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-container {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
         .confirmation-log {
             margin-top: 15px;
-            padding: 10px;
+            padding: 12px;
             background: #e9f7ef;
             border: 1px solid #d4efdf;
             border-radius: 6px;
@@ -107,6 +123,7 @@
             font-size: 0.9rem;
             display: none;
             font-weight: bold;
+            text-align: center;
         }
     </style>
 </head>
@@ -120,30 +137,50 @@
         <button class="btn-connect" id="connect-btn">Connect to Device</button>
 
         <div class="form-group" id="config-form">
-            <label style="font-size: 0.85rem; font-weight: bold; color: #555;">New Parameter Value:</label>
-            <input type="text" id="param-input" placeholder="e.g. Speed=50">
-            <button class="btn-send" id="send-btn" disabled>Save to Device</button>
+            <div class="input-container">
+                <label for="speed-input">Motor Speed:</label>
+                <div class="input-row">
+                    <input type="number" id="speed-input" placeholder="e.g. 500">
+                    <button class="btn-send" id="send-speed-btn" disabled
+                        style="width: auto; padding: 0 20px;">Save</button>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <label for="bright-input">LED Brightness (0-255):</label>
+                <div class="input-row">
+                    <input type="number" id="bright-input" placeholder="e.g. 150" min="0" max="255">
+                    <button class="btn-send" id="send-bright-btn" disabled
+                        style="width: auto; padding: 0 20px;">Save</button>
+                </div>
+            </div>
+
             <div class="confirmation-log" id="log-box"></div>
         </div>
     </div>
 
     <script>
+        // 1. BLE PROTOCOL CONFIGURATION (Must match the ESP32 definitions exactly)
         const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
         const RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-        const TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Added TX
+        const TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
         let bleDevice = null;
         let rxCharacteristic = null;
         let txCharacteristic = null;
 
+        // DOM UI Elements References
         const connectBtn = document.getElementById('connect-btn');
-        const sendBtn = document.getElementById('send-btn');
-        const paramInput = document.getElementById('param-input');
+        const sendSpeedBtn = document.getElementById('send-speed-btn');
+        const sendBrightBtn = document.getElementById('send-bright-btn');
+        const speedInput = document.getElementById('speed-input');
+        const brightInput = document.getElementById('bright-input');
         const statusVal = document.getElementById('status-val');
         const statusText = document.getElementById('status-text');
         const configForm = document.getElementById('config-form');
         const logBox = document.getElementById('log-box');
 
+        // 2. CONNECTION MANAGEMENT
         connectBtn.addEventListener('click', async () => {
             if (bleDevice && bleDevice.gatt.connected) {
                 disconnectDevice();
@@ -152,6 +189,8 @@
 
             try {
                 statusVal.textContent = "Searching...";
+
+                // Filter target selection strictly by your project broadcasting signature
                 bleDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ name: 'C3-Config-Device' }],
                     optionalServices: [SERVICE_UUID]
@@ -167,52 +206,66 @@
                 rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
                 txCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC_UUID);
 
-                // Start listening to the ESP32's TX responses
+                // Subscribe to the notification pipeline back from the board
                 await txCharacteristic.startNotifications();
                 txCharacteristic.addEventListener('characteristicvaluechanged', handleIncomingConfirmation);
 
-                // Update UI
+                // Update UI State to Connected
                 statusVal.textContent = "Connected";
                 statusText.classList.add('connected');
                 connectBtn.textContent = "Disconnect";
-                connectBtn.style.backgroundColor = "#ff3b30"; // Fixed typo here
+                connectBtn.style.backgroundColor = "#ff3b30";
                 configForm.style.display = "block";
-                sendBtn.disabled = false;
+                sendSpeedBtn.disabled = false;
+                sendBrightBtn.disabled = false;
 
                 bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
             } catch (error) {
-                console.error("BLE Error:", error);
+                console.error("BLE Error Encountered: ", error);
                 resetUI();
             }
         });
 
-        sendBtn.addEventListener('click', async () => {
-            const val = paramInput.value.trim();
-            if (!val || !rxCharacteristic) return;
+        // 3. TARGET EMBEDDED PACKET TRANSMISSION
+        sendSpeedBtn.addEventListener('click', () => sendTaggedValue('S', speedInput.value));
+        sendBrightBtn.addEventListener('click', () => sendTaggedValue('B', brightInput.value));
+
+        async function sendTaggedValue(tag, rawValue) {
+            const cleanValue = rawValue.trim();
+            if (!cleanValue || !rxCharacteristic) return;
 
             try {
-                logBox.style.display = "none"; // Clear old logs
-                const encoder = new TextEncoder();
-                const data = encoder.encode(val);
-                await rxCharacteristic.writeValue(data);
-                paramInput.value = "";
-            } catch (error) {
-                alert("Failed to send: " + error);
-            }
-        });
+                logBox.style.display = "none"; // Hide previous confirmation feedback context
 
-        // Handle back-talk from the ESP32
+                // Append single-character routing tag onto data string payload
+                const packetString = tag + cleanValue;
+
+                // Transmit text string translated to an array of raw standard bytes
+                const encoder = new TextEncoder();
+                const data = encoder.encode(packetString);
+                await rxCharacteristic.writeValue(data);
+
+                // Clear inputs dynamically following click event execution
+                if (tag === 'S') speedInput.value = "";
+                if (tag === 'B') brightInput.value = "";
+            } catch (error) {
+                alert("Failed to deliver configuration value: " + error);
+            }
+        }
+
+        // 4. BIDIRECTIONAL RESPONSE PROCESSING
         function handleIncomingConfirmation(event) {
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
-            const incomingString = decoder.decode(value);
+            const confirmationString = decoder.decode(value);
 
-            // Show the message directly in our custom UI log box
-            logBox.textContent = incomingString;
+            // Print the custom text payload sent by the microcontroller directly to our UI box
+            logBox.textContent = confirmationString;
             logBox.style.display = "block";
         }
 
+        // 5. TEARDOWN AND HARDWARE DISCONNECT RESET ROUTINES
         function disconnectDevice() {
             if (bleDevice && bleDevice.gatt.connected) {
                 bleDevice.gatt.disconnect();
@@ -220,6 +273,7 @@
         }
 
         function onDisconnected() {
+            alert("Device link interrupted or disconnected.");
             resetUI();
         }
 
@@ -230,7 +284,8 @@
             connectBtn.style.backgroundColor = "#007aff";
             configForm.style.display = "none";
             logBox.style.display = "none";
-            sendBtn.disabled = true;
+            sendSpeedBtn.disabled = true;
+            sendBrightBtn.disabled = true;
             bleDevice = null;
             rxCharacteristic = null;
             txCharacteristic = null;
