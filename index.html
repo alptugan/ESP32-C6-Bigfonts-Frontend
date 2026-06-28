@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Control Panel</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 5px;
+            color: #111;
+        }
+
+        .status {
+            font-size: 0.9rem;
+            margin-bottom: 25px;
+            color: #666;
+        }
+
+        .status span {
+            font-weight: bold;
+            color: #d9534f;
+        }
+
+        .status.connected span {
+            color: #5cb85c;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-connect {
+            background-color: #007aff;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .btn-connect:hover {
+            background-color: #0062cc;
+        }
+
+        .btn-send {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-send:hover {
+            background-color: #218838;
+        }
+
+        .btn-send:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+
+        .form-group {
+            display: none;
+            text-align: left;
+        }
+
+        .confirmation-log {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e9f7ef;
+            border: 1px solid #d4efdf;
+            border-radius: 6px;
+            color: #1e7e34;
+            font-size: 0.9rem;
+            display: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h2>Device Config</h2>
+        <div class="status" id="status-text">Status: <span id="status-val">Disconnected</span></div>
+
+        <button class="btn-connect" id="connect-btn">Connect to Device</button>
+
+        <div class="form-group" id="config-form">
+            <label style="font-size: 0.85rem; font-weight: bold; color: #555;">New Parameter Value:</label>
+            <input type="text" id="param-input" placeholder="e.g. Speed=50">
+            <button class="btn-send" id="send-btn" disabled>Save to Device</button>
+            <div class="confirmation-log" id="log-box"></div>
+        </div>
+    </div>
+
+    <script>
+        const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+        const TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Added TX
+
+        let bleDevice = null;
+        let rxCharacteristic = null;
+        let txCharacteristic = null;
+
+        const connectBtn = document.getElementById('connect-btn');
+        const sendBtn = document.getElementById('send-btn');
+        const paramInput = document.getElementById('param-input');
+        const statusVal = document.getElementById('status-val');
+        const statusText = document.getElementById('status-text');
+        const configForm = document.getElementById('config-form');
+        const logBox = document.getElementById('log-box');
+
+        connectBtn.addEventListener('click', async () => {
+            if (bleDevice && bleDevice.gatt.connected) {
+                disconnectDevice();
+                return;
+            }
+
+            try {
+                statusVal.textContent = "Searching...";
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'C3-Config-Device' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                statusVal.textContent = "Connecting...";
+                const server = await bleDevice.gatt.connect();
+
+                statusVal.textContent = "Fetching Service...";
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                statusVal.textContent = "Setting up Channels...";
+                rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+                txCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+
+                // Start listening to the ESP32's TX responses
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleIncomingConfirmation);
+
+                // Update UI
+                statusVal.textContent = "Connected";
+                statusText.classList.add('connected');
+                connectBtn.textContent = "Disconnect";
+                connectBtn.style.backgroundColor = "#ff3b30"; // Fixed typo here
+                configForm.style.display = "block";
+                sendBtn.disabled = false;
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+            } catch (error) {
+                console.error("BLE Error:", error);
+                resetUI();
+            }
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            const val = paramInput.value.trim();
+            if (!val || !rxCharacteristic) return;
+
+            try {
+                logBox.style.display = "none"; // Clear old logs
+                const encoder = new TextEncoder();
+                const data = encoder.encode(val);
+                await rxCharacteristic.writeValue(data);
+                paramInput.value = "";
+            } catch (error) {
+                alert("Failed to send: " + error);
+            }
+        });
+
+        // Handle back-talk from the ESP32
+        function handleIncomingConfirmation(event) {
+            const value = event.target.value;
+            const decoder = new TextDecoder('utf-8');
+            const incomingString = decoder.decode(value);
+
+            // Show the message directly in our custom UI log box
+            logBox.textContent = incomingString;
+            logBox.style.display = "block";
+        }
+
+        function disconnectDevice() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        }
+
+        function onDisconnected() {
+            resetUI();
+        }
+
+        function resetUI() {
+            statusVal.textContent = "Disconnected";
+            statusText.classList.remove('connected');
+            connectBtn.textContent = "Connect to Device";
+            connectBtn.style.backgroundColor = "#007aff";
+            configForm.style.display = "none";
+            logBox.style.display = "none";
+            sendBtn.disabled = true;
+            bleDevice = null;
+            rxCharacteristic = null;
+            txCharacteristic = null;
+        }
+    </script>
+
+</body>
+
+</html>
