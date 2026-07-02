@@ -82,7 +82,8 @@
             cursor: not-allowed;
         }
 
-        input[type="number"] {
+        input[type="number"],
+        input[type="text"] {
             width: 100%;
             padding: 12px;
             box-sizing: border-box;
@@ -201,9 +202,9 @@
             try {
                 statusVal.textContent = "Searching...";
 
-                // FIXED: Now correctly looking for your C6 board's specific name!
+
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'C6-Config-Device-LCD' }],
+                    filters: [{ namePrefix: 'C' }],
                     optionalServices: [SERVICE_UUID]
                 });
 
