@@ -155,6 +155,15 @@
                 </div>
             </div>
 
+            <div class="input-container">
+                <label for="name-input">Name Tag Text:</label>
+                <div class="input-row">
+                    <input type="text" id="name-input" placeholder="e.g. JOHN DOE" maxlength="20">
+                    <button class="btn-send" id="send-name-btn" disabled
+                        style="width: auto; padding: 0 20px;">Save</button>
+                </div>
+            </div>
+
             <div class="confirmation-log" id="log-box"></div>
         </div>
     </div>
@@ -179,6 +188,25 @@
         const statusText = document.getElementById('status-text');
         const configForm = document.getElementById('config-form');
         const logBox = document.getElementById('log-box');
+        ////////////////////////////////////////////////////////////////////////////
+        // Name Tag Section
+        ////////////////////////////////////////////////////////////////////////////
+        const sendNameBtn = document.getElementById('send-name-btn');
+        const nameInput = document.getElementById('name-input');
+
+        // 2. Inside connectBtn.addEventListener (where you enable buttons):
+        sendNameBtn.disabled = false;
+
+        // 3. Under TARGET EMBEDDED PACKET TRANSMISSION (with the other listeners):
+        sendNameBtn.addEventListener('click', () => sendTaggedValue('N', nameInput.value));
+
+        // 4. Inside the sendTaggedValue() function (to clear the input after sending):
+        if (tag === 'N') nameInput.value = "";
+
+        // 5. Inside resetUI() (to lock the button on disconnect):
+        sendNameBtn.disabled = true;
+        ////////////////////////////////////////////////////////////////////////////
+
 
         // 2. CONNECTION MANAGEMENT
         connectBtn.addEventListener('click', async () => {
