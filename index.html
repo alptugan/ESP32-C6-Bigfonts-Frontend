@@ -182,31 +182,14 @@
         const connectBtn = document.getElementById('connect-btn');
         const sendSpeedBtn = document.getElementById('send-speed-btn');
         const sendBrightBtn = document.getElementById('send-bright-btn');
+        const sendNameBtn = document.getElementById('send-name-btn'); // Name Tag Button
         const speedInput = document.getElementById('speed-input');
         const brightInput = document.getElementById('bright-input');
+        const nameInput = document.getElementById('name-input');      // Name Tag Input
         const statusVal = document.getElementById('status-val');
         const statusText = document.getElementById('status-text');
         const configForm = document.getElementById('config-form');
         const logBox = document.getElementById('log-box');
-        ////////////////////////////////////////////////////////////////////////////
-        // Name Tag Section
-        ////////////////////////////////////////////////////////////////////////////
-        const sendNameBtn = document.getElementById('send-name-btn');
-        const nameInput = document.getElementById('name-input');
-
-        // 2. Inside connectBtn.addEventListener (where you enable buttons):
-        sendNameBtn.disabled = false;
-
-        // 3. Under TARGET EMBEDDED PACKET TRANSMISSION (with the other listeners):
-        sendNameBtn.addEventListener('click', () => sendTaggedValue('N', nameInput.value));
-
-        // 4. Inside the sendTaggedValue() function (to clear the input after sending):
-        if (tag === 'N') nameInput.value = "";
-
-        // 5. Inside resetUI() (to lock the button on disconnect):
-        sendNameBtn.disabled = true;
-        ////////////////////////////////////////////////////////////////////////////
-
 
         // 2. CONNECTION MANAGEMENT
         connectBtn.addEventListener('click', async () => {
@@ -218,9 +201,9 @@
             try {
                 statusVal.textContent = "Searching...";
 
-                // Filter target selection strictly by your project broadcasting signature
+                // FIXED: Now correctly looking for your C6 board's specific name!
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'C3-Config-Device' }],
+                    filters: [{ name: 'C6-Config-Device-LCD' }],
                     optionalServices: [SERVICE_UUID]
                 });
 
@@ -244,8 +227,11 @@
                 connectBtn.textContent = "Disconnect";
                 connectBtn.style.backgroundColor = "#ff3b30";
                 configForm.style.display = "block";
+
+                // Enable the send buttons
                 sendSpeedBtn.disabled = false;
                 sendBrightBtn.disabled = false;
+                sendNameBtn.disabled = false;
 
                 bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
@@ -258,6 +244,7 @@
         // 3. TARGET EMBEDDED PACKET TRANSMISSION
         sendSpeedBtn.addEventListener('click', () => sendTaggedValue('S', speedInput.value));
         sendBrightBtn.addEventListener('click', () => sendTaggedValue('B', brightInput.value));
+        sendNameBtn.addEventListener('click', () => sendTaggedValue('N', nameInput.value));
 
         async function sendTaggedValue(tag, rawValue) {
             const cleanValue = rawValue.trim();
@@ -277,6 +264,8 @@
                 // Clear inputs dynamically following click event execution
                 if (tag === 'S') speedInput.value = "";
                 if (tag === 'B') brightInput.value = "";
+                if (tag === 'N') nameInput.value = "";
+
             } catch (error) {
                 alert("Failed to deliver configuration value: " + error);
             }
@@ -312,8 +301,12 @@
             connectBtn.style.backgroundColor = "#007aff";
             configForm.style.display = "none";
             logBox.style.display = "none";
+
+            // Disable the send buttons
             sendSpeedBtn.disabled = true;
             sendBrightBtn.disabled = true;
+            sendNameBtn.disabled = true;
+
             bleDevice = null;
             rxCharacteristic = null;
             txCharacteristic = null;
