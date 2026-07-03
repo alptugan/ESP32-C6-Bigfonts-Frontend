@@ -5,131 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Device Control Panel</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f4f7f6;
-            color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-
-        .card {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-
-        h2 {
-            margin-bottom: 5px;
-            color: #111;
-        }
-
-        .status {
-            font-size: 0.9rem;
-            margin-bottom: 25px;
-            color: #666;
-        }
-
-        .status span {
-            font-weight: bold;
-            color: #d9534f;
-        }
-
-        .status.connected span {
-            color: #5cb85c;
-        }
-
-        button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .btn-connect {
-            background-color: #007aff;
-            color: white;
-            margin-bottom: 20px;
-        }
-
-        .btn-connect:hover {
-            background-color: #0062cc;
-        }
-
-        .btn-send {
-            background-color: #28a745;
-            color: white;
-        }
-
-        .btn-send:hover {
-            background-color: #218838;
-        }
-
-        .btn-send:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        input[type="number"],
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-
-        .form-group {
-            display: none;
-            text-align: left;
-        }
-
-        .input-row {
-            display: flex;
-            gap: 10px;
-        }
-
-        .input-container {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            font-size: 0.85rem;
-            font-weight: bold;
-            color: #555;
-            margin-bottom: 5px;
-        }
-
-        .confirmation-log {
-            margin-top: 15px;
-            padding: 12px;
-            background: #e9f7ef;
-            border: 1px solid #d4efdf;
-            border-radius: 6px;
-            color: #1e7e34;
-            font-size: 0.9rem;
-            display: none;
-            font-weight: bold;
-            text-align: center;
-        }
-    </style>
+    <!-- Link to external CSS file -->
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+    <!-- Theme Toggle Switch -->
+    <div class="theme-switch-wrapper">
+        <label class="theme-switch" for="theme-toggle">
+            <input type="checkbox" id="theme-toggle" />
+            <span class="slider"></span>
+        </label>
+    </div>
 
     <div class="card">
         <h2>Device Config</h2>
@@ -170,7 +57,32 @@
     </div>
 
     <script>
-        // 1. BLE PROTOCOL CONFIGURATION (Must match the ESP32 definitions exactly)
+        // ============================================================================
+        // 0. THEME TOGGLE LOGIC
+        // ============================================================================
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+
+        // Check local storage for saved preference on load
+        if (localStorage.getItem('theme') === 'light') {
+            body.classList.add('light-mode');
+            themeToggle.checked = true; // Slide the toggle to the right (Sun)
+        }
+
+        // Listen for the toggle switch being flipped
+        themeToggle.addEventListener('change', () => {
+            if (themeToggle.checked) {
+                body.classList.add('light-mode');
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.remove('light-mode');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // ============================================================================
+        // 1. BLE PROTOCOL CONFIGURATION
+        // ============================================================================
         const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
         const RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
         const TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
@@ -183,16 +95,18 @@
         const connectBtn = document.getElementById('connect-btn');
         const sendSpeedBtn = document.getElementById('send-speed-btn');
         const sendBrightBtn = document.getElementById('send-bright-btn');
-        const sendNameBtn = document.getElementById('send-name-btn'); // Name Tag Button
+        const sendNameBtn = document.getElementById('send-name-btn');
         const speedInput = document.getElementById('speed-input');
         const brightInput = document.getElementById('bright-input');
-        const nameInput = document.getElementById('name-input');      // Name Tag Input
+        const nameInput = document.getElementById('name-input');
         const statusVal = document.getElementById('status-val');
         const statusText = document.getElementById('status-text');
         const configForm = document.getElementById('config-form');
         const logBox = document.getElementById('log-box');
 
+        // ============================================================================
         // 2. CONNECTION MANAGEMENT
+        // ============================================================================
         connectBtn.addEventListener('click', async () => {
             if (bleDevice && bleDevice.gatt.connected) {
                 disconnectDevice();
@@ -202,7 +116,7 @@
             try {
                 statusVal.textContent = "Searching...";
 
-
+                // Use namePrefix to bypass ESP32 NVS caching bugs
                 bleDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'C' }],
                     optionalServices: [SERVICE_UUID]
@@ -225,8 +139,11 @@
                 // Update UI State to Connected
                 statusVal.textContent = "Connected";
                 statusText.classList.add('connected');
+
+                // Swap button styling to the 'Disconnect' Danger Red
+                connectBtn.classList.add('disconnect-mode');
                 connectBtn.textContent = "Disconnect";
-                connectBtn.style.backgroundColor = "#ff3b30";
+
                 configForm.style.display = "block";
 
                 // Enable the send buttons
@@ -242,7 +159,9 @@
             }
         });
 
+        // ============================================================================
         // 3. TARGET EMBEDDED PACKET TRANSMISSION
+        // ============================================================================
         sendSpeedBtn.addEventListener('click', () => sendTaggedValue('S', speedInput.value));
         sendBrightBtn.addEventListener('click', () => sendTaggedValue('B', brightInput.value));
         sendNameBtn.addEventListener('click', () => sendTaggedValue('N', nameInput.value));
@@ -252,7 +171,7 @@
             if (!cleanValue || !rxCharacteristic) return;
 
             try {
-                logBox.style.display = "none"; // Hide previous confirmation feedback context
+                logBox.style.display = "none";
 
                 // Append single-character routing tag onto data string payload
                 const packetString = tag + cleanValue;
@@ -272,7 +191,9 @@
             }
         }
 
+        // ============================================================================
         // 4. BIDIRECTIONAL RESPONSE PROCESSING
+        // ============================================================================
         function handleIncomingConfirmation(event) {
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
@@ -283,7 +204,9 @@
             logBox.style.display = "block";
         }
 
+        // ============================================================================
         // 5. TEARDOWN AND HARDWARE DISCONNECT RESET ROUTINES
+        // ============================================================================
         function disconnectDevice() {
             if (bleDevice && bleDevice.gatt.connected) {
                 bleDevice.gatt.disconnect();
@@ -298,8 +221,11 @@
         function resetUI() {
             statusVal.textContent = "Disconnected";
             statusText.classList.remove('connected');
+
+            // Revert button styling back to the Accent Yellow
+            connectBtn.classList.remove('disconnect-mode');
             connectBtn.textContent = "Connect to Device";
-            connectBtn.style.backgroundColor = "#007aff";
+
             configForm.style.display = "none";
             logBox.style.display = "none";
 
