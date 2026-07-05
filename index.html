@@ -75,7 +75,7 @@
                 <!-- Second Row: Day, Month, Year -->
                 <div class="time-row">
                     <div class="time-col">
-                        <label for="day-select">Day</label>
+                        <label for="day-input">Day</label>
                         <div class="combobox-container">
                             <input type="text" id="day-input" placeholder="DD" list="day-options">
                             <datalist id="day-options">
@@ -84,7 +84,7 @@
                         </div>
                     </div>
                     <div class="time-col">
-                        <label for="month-select">Month</label>
+                        <label for="month-input">Month</label>
                         <div class="combobox-container">
                             <input type="text" id="month-input" placeholder="MM" list="month-options">
                             <datalist id="month-options">
@@ -93,7 +93,7 @@
                         </div>
                     </div>
                     <div class="time-col">
-                        <label for="year-select">Year</label>
+                        <label for="year-input">Year</label>
                         <div class="combobox-container">
                             <input type="text" id="year-input" placeholder="YYYY" list="year-options">
                             <datalist id="year-options">
@@ -243,7 +243,10 @@
 
                 // Request initial state from the device
                 // We use sendTaggedValue to ensure it goes through the same pipeline
-                await sendTaggedValue('I', ' ');
+                // Add a small delay to ensure the ESP32 is ready to receive after connection
+                setTimeout(async () => {
+                    await sendTaggedValue('I', ' ');
+                }, 500);
 
                 // Update UI State to Connected
                 statusVal.textContent = "Connected";
@@ -305,22 +308,21 @@
                 // Transmit text string translated to an array of raw standard bytes
                 const encoder = new TextEncoder();
                 const data = encoder.encode(packetString);
-                await rxCharacteristic.writeValue(data);
 
-                // Clear inputs dynamically following click event execution
-                // We no longer clear the inputs so the user can see what they just saved
-                // if (tag === 'S') speedInput.value = "";
-                // if (tag === 'B') brightInput.value = "";
-                // if (tag === 'N') nameInput.value = "";
-                // if (tag === 'T') {
-                //     hourInput.value = "";
-                //     minuteInput.value = "";
-                //     secondInput.value = "";
-                //     dayInput.value = "";
-                //     monthInput.value = "";
-                //     yearInput.value = "";
-                // }
-
+                // Use writeValue to ensure the ESP32 receives the initial state request reliably
+                if (tag === 'I') {
+                    if (rxCharacteristic.writeValueWithResponse) {
+                        await rxCharacteristic.writeValueWithResponse(data);
+                    } else {
+                        await rxCharacteristic.writeValue(data); // Fallback for older browsers
+                    }
+                } else {
+                    if (rxCharacteristic.writeValueWithoutResponse) {
+                        await rxCharacteristic.writeValueWithoutResponse(data);
+                    } else {
+                        await rxCharacteristic.writeValue(data); // Fallback for older browsers
+                    }
+                }
             } catch (error) {
                 alert("Failed to deliver configuration value: " + error);
             }
@@ -333,6 +335,8 @@
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
             const confirmationString = decoder.decode(value);
+
+            console.log("Received from device:", confirmationString);
 
             // Check if this is an Initial State packet (starts with 'I,')
             if (confirmationString.startsWith('I,')) {
