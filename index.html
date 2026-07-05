@@ -119,6 +119,10 @@
                     </div>
                 </div>
 
+                <!-- Fetch Local Time Button -->
+                <button class="btn-send" id="fetch-time-btn" style="margin-top: 10px; background-color: #007bff;">Fetch
+                    Current Date and Time</button>
+
                 <!-- Save Time Button -->
                 <button class="btn-send" id="send-time-btn" disabled style="margin-top: 10px;">Save Time</button>
             </div>
@@ -167,6 +171,7 @@
         const sendSpeedBtn = document.getElementById('send-speed-btn');
         const sendBrightBtn = document.getElementById('send-bright-btn');
         const sendNameBtn = document.getElementById('send-name-btn');
+        const fetchTimeBtn = document.getElementById('fetch-time-btn');
         const sendTimeBtn = document.getElementById('send-time-btn');
         const speedInput = document.getElementById('speed-input');
         const brightInput = document.getElementById('bright-input');
@@ -278,6 +283,22 @@
         sendSpeedBtn.addEventListener('click', () => sendTaggedValue('S', speedInput.value));
         sendBrightBtn.addEventListener('click', () => sendTaggedValue('B', brightInput.value));
         sendNameBtn.addEventListener('click', () => sendTaggedValue('N', nameInput.value));
+
+        fetchTimeBtn.addEventListener('click', () => {
+            const now = new Date();
+            hourInput.value = now.getHours().toString().padStart(2, '0');
+            minuteInput.value = now.getMinutes().toString().padStart(2, '0');
+            secondInput.value = now.getSeconds().toString().padStart(2, '0');
+            dayInput.value = now.getDate().toString().padStart(2, '0');
+            monthInput.value = (now.getMonth() + 1).toString().padStart(2, '0');
+            yearInput.value = now.getFullYear().toString();
+
+            // JavaScript getDay() returns 0 for Sunday, 1 for Monday, etc.
+            // Our dropdown uses 1 for Sunday, 2 for Monday, etc.
+            const jsDow = now.getDay();
+            dowSelect.value = (jsDow + 1).toString();
+        });
+
         sendTimeBtn.addEventListener('click', () => {
             // Format: T,HH,MM,SS,DD,MM,YY,DOW
             // e.g. T12,34,56,05,07,26,1
@@ -294,7 +315,7 @@
         });
 
         async function sendTaggedValue(tag, rawValue) {
-            const cleanValue = rawValue.trim();
+            const cleanValue = (tag === 'I') ? rawValue : rawValue.trim();
             // Allow empty string for 'I' tag (Initial State Request)
             if (tag !== 'I' && !cleanValue) return;
             if (!rxCharacteristic) return;
