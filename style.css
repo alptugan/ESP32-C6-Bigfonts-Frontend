@@ -278,3 +278,56 @@ label {
     font-weight: bold;
     text-align: center;
 }
+
+/* Time Management Container Styles */
+.time-container {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.time-container h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    color: var(--text-heading);
+}
+
+.time-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.time-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.time-col.full-width {
+    flex: none;
+    width: 100%;
+}
+
+.combobox-container {
+    position: relative;
+    width: 100%;
+}
+
+select {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    background-color: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: all 0.3s;
+    outline: none;
+}
+
+select:focus {
+    border-color: var(--accent-color);
+}
