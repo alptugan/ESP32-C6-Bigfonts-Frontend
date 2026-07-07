@@ -228,12 +228,22 @@
 
                 // Prefer service-based filtering to avoid name mismatch lockouts.
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [SERVICE_UUID] }],
+                    filters: [{
+                        namePrefix: 'ESP32-C6',
+                        services: [SERVICE_UUID]
+                    }],
                     optionalServices: [SERVICE_UUID]
                 });
 
                 statusVal.textContent = "Connecting...";
-                const server = await bleDevice.gatt.connect();
+                let server;
+                try {
+                    server = await bleDevice.gatt.connect();
+                } catch (firstError) {
+                    // One retry handles occasional transient stack timing failures.
+                    console.warn('First BLE connect attempt failed, retrying once...', firstError);
+                    server = await bleDevice.gatt.connect();
+                }
 
                 statusVal.textContent = "Fetching Service...";
                 const service = await server.getPrimaryService(SERVICE_UUID);
