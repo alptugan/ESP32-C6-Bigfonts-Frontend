@@ -228,7 +228,10 @@
 
                 // Use namePrefix to bypass ESP32 NVS caching bugs
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'E' }],
+                    filters: [{
+                        name: 'ESP32-C6-Pager-LCD',
+                        services: [SERVICE_UUID]
+                    }],
                     optionalServices: [SERVICE_UUID]
                 });
 
@@ -250,7 +253,9 @@
                 // We use sendTaggedValue to ensure it goes through the same pipeline
                 // Add a small delay to ensure the ESP32 is ready to receive after connection
                 setTimeout(async () => {
-                    await sendTaggedValue('I', ' ');
+                    if (bleDevice && bleDevice.gatt.connected) {
+                        await sendTaggedValue('I', ' ');
+                    }
                 }, 500);
 
                 // Update UI State to Connected
