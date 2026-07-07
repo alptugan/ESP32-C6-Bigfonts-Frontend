@@ -379,7 +379,13 @@
                     const yy = parseInt(parts[9], 10);
                     yearInput.value = (2000 + yy).toString();
 
-                    dowSelect.value = parts[10];
+                    // Device sends DS1302 DOW: 1=Mon ... 7=Sun.
+                    // UI dropdown expects: 1=Sun ... 7=Sat.
+                    const rtcDow = parseInt(parts[10], 10);
+                    if (!Number.isNaN(rtcDow) && rtcDow >= 1 && rtcDow <= 7) {
+                        const uiDow = (rtcDow === 7) ? 1 : (rtcDow + 1);
+                        dowSelect.value = uiDow.toString();
+                    }
 
                     logBox.textContent = "Device state loaded successfully.";
                     logBox.style.display = "block";
