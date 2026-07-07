@@ -226,12 +226,9 @@
             try {
                 statusVal.textContent = "Searching...";
 
-                // Use namePrefix to bypass ESP32 NVS caching bugs
+                // Prefer service-based filtering to avoid name mismatch lockouts.
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{
-                        name: 'ESP32-C6-Pager-LCD',
-                        services: [SERVICE_UUID]
-                    }],
+                    filters: [{ services: [SERVICE_UUID] }],
                     optionalServices: [SERVICE_UUID]
                 });
 
